@@ -30,7 +30,7 @@ init_db()
 class MessageRequest(BaseModel):
     message: str
 
-@app.get("/")
+@app.get("/analyze")
 def root():
     return {"status": "online", "challenge": "Agentic Honey-Pot"}
 
@@ -61,3 +61,4 @@ async def analyze_message(payload: MessageRequest, x_api_key: Optional[str] = He
 @app.get("/history")
 def history():
     return get_history()
+
