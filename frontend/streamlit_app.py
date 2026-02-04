@@ -1,97 +1,151 @@
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List
-import logging
+import streamlit as st
+import requests
+import json
+from PIL import Image
+import os
 
-# Import your agent logic
-from config import API_KEY, CONFIDENCE_SCAM, CONFIDENCE_SAFE
-from agents.detector import is_scam
-from agents.extractor import extract_entities
-from agents.responder import generate_reply
-from database.db import init_db, save_message, get_history
+# ==============================
+# CONFIG
+# ==============================
+# Base URL for your FastAPI backend on Render
+RENDER_BACKEND_URL = "https://honeypot-ai-8dvx.onrender.com"
 
-# Setup logging for Render console
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+API_URL = f"{RENDER_BACKEND_URL}/analyze"
+HISTORY_URL = f"{RENDER_BACKEND_URL}/history"
+API_KEY = "HCL123"
 
-app = FastAPI(title="Ghost Bait API - Challenge 2")
+# ==============================
+# PAGE CONFIG
+# ==============================
+st.set_page_config(page_title="Ghost Bait - Honeypot", layout="centered")
 
-# Configure CORS for the Streamlit frontend and Tester tool
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ==============================
+# FUTURISTIC THEME
+# ==============================
+st.markdown("""
+<style>
+.stApp {
+    background: radial-gradient(circle at top, #0f172a, #020617);
+    color: #e2e8f0;
+}
+.main-title {
+    color: #22d3ee;
+    text-align: center;
+    font-size: 42px;
+    font-weight: 700;
+}
+.sub-title {
+    color: #94a3b8;
+    text-align: center;
+    font-size: 16px;
+}
+.stButton>button {
+    background: linear-gradient(90deg, #06b6d4, #9333ea);
+    color: white;
+    border-radius: 12px;
+    border: none;
+    padding: 0.6em 1em;
+    width: 100%;
+}
+.stTextArea textarea {
+    background-color: #020617;
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# Initialize Database on startup
-init_db()
+# ==============================
+# HEADER & LOGO
+# ==============================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+logo_filename = "Bharat ai force logo.jpeg"
+logo_path = os.path.join(current_dir, logo_filename)
 
-# --- Pydantic model for input validation ---
-class MessageRequest(BaseModel):
-    message: str
+col_logo, col_title = st.columns([1, 5])
 
-@app.get("/")
-def root():
-    return {
-        "status": "online", 
-        "service": "Ghost Bait Honeypot",
-        "challenge": "Agentic Honey-Pot for Scam Detection"
-    }
-
-@app.post("/analyze")
-async def analyze_message(
-    payload: MessageRequest, 
-    x_api_key: Optional[str] = Header(None)
-) -> dict:
-    """
-    Primary endpoint for the Honeypot API Endpoint Tester.
-    Verifies authentication and returns structured forensic intelligence.
-    """
-    
-    # 1. API Authentication
-    if x_api_key != API_KEY:
-        logger.warning(f"Unauthorized access attempt with key: {x_api_key}")
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-
-    user_text = payload.message.strip()
-    if not user_text:
-        raise HTTPException(status_code=400, detail="Empty message")
-
-    # 2. Autonomous Scam Detection
-    is_malicious = is_scam(user_text)
-    
-    # 3. Intelligence Extraction (UPI, Bank, Phishing Links)
-    # We extract entities only if it's a scam to maintain focus
-    if is_malicious:
-        entities = extract_entities(user_text)
+with col_logo:
+    if os.path.exists(logo_path):
+        try:
+            logo = Image.open(logo_path)
+            st.image(logo, width=80)
+        except:
+            st.write("🛡️")
     else:
-        entities = {"bank": [], "upi": [], "links": [], "phones": [], "emails": []}
+        st.write("🛡️")
 
-    # 4. Construct Structured JSON Response
-    # We use explicit casting (bool, float, list) to prevent INVALID_REQUEST_BODY errors
-    response_data = {
-        "scam_detected": bool(is_malicious),
-        "confidence": float(CONFIDENCE_SCAM if is_malicious else CONFIDENCE_SAFE),
-        "bank_accounts": list(entities.get("bank", [])),
-        "upi_ids": list(entities.get("upi", [])),
-        "links": list(entities.get("links", [])),
-        "phones": list(entities.get("phones", [])),
-        "emails": list(entities.get("emails", [])),
-        "agent_reply": str(generate_reply(user_text, is_malicious))
-    }
+with col_title:
+    st.markdown('<div class="main-title">Ghost Bait</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Agentic Honey-Pot | Designed by Bharat AI-Force</div>', unsafe_allow_html=True)
 
-    # 5. Persistent Logging
-    try:
-        save_message(user_text, response_data)
-    except Exception as e:
-        logger.error(f"Database save error: {e}")
+st.markdown("---")
 
-    return response_data
+# ==============================
+# SIDEBAR HISTORY
+# ==============================
+st.sidebar.title("Forensic History")
+st.sidebar.markdown("Extracted Intelligence Logs")
 
-@app.get("/history")
-def history():
-    """Fetches conversation history for the Streamlit sidebar."""
-    return get_history()
+try:
+    res = requests.get(HISTORY_URL, timeout=10)
+    if res.status_code == 200:
+        history_data = res.json()
+        if history_data:
+            for i, item in enumerate(history_data[::-1], 1):
+                with st.sidebar.expander(f"Case Log #{i}"):
+                    st.json(item)
+        else:
+            st.sidebar.info("No logs found.")
+    else:
+        st.sidebar.warning("Backend starting...")
+except:
+    st.sidebar.error("Connecting to API...")
+
+# ==============================
+# MAIN INTERFACE
+# ==============================
+st.markdown("### Autonomous Scam Analysis")
+message = st.text_area("Input Suspicious Message", height=200, placeholder="Paste scam texts, phishing links, or bank alerts here...")
+
+if st.button("Run Forensic Analysis"):
+    if not message.strip():
+        st.warning("Please provide a message for analysis.")
+    else:
+        headers = {"x-api-key": API_KEY}
+        payload = {"message": message}
+        
+        try:
+            with st.spinner("Extracting Intelligence..."):
+                res = requests.post(API_URL, json=payload, headers=headers, timeout=30)
+
+            if res.status_code == 200:
+                data = res.json()
+                
+                # Display Scam Status
+                if data.get("scam_detected"):
+                    st.error("🚨 SCAM DETECTED")
+                    st.info(f"**Honeypot Response:** {data.get('agent_reply')}")
+                else:
+                    st.success("✅ MESSAGE VERIFIED SAFE")
+
+                # Display Results
+                st.markdown("#### Structured Forensic Data")
+                st.json(data)
+                
+                # Download Result
+                st.download_button(
+                    label="Download Forensic JSON",
+                    data=json.dumps(data, indent=4),
+                    file_name="honeypot_intelligence.json",
+                    mime="application/json"
+                )
+            else:
+                st.error(f"Error {res.status_code}: Check API credentials and endpoint.")
+        except Exception as e:
+            st.error(f"Failed to connect to the backend engine: {e}")
+
+# ==============================
+# FOOTER
+# ==============================
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: #64748b;'>Challenge 2 Implementation | Bharat AI-Force</p>", unsafe_allow_html=True)
