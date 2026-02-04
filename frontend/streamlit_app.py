@@ -54,25 +54,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================
-# HEADER & LOGO FIX
+# HEADER & LOGO (FIXED)
 # ==============================
-# This looks in the same folder as this script for the image
 current_dir = os.path.dirname(os.path.abspath(__file__))
-logo_name = "Bharat ai force logo.jpeg" 
-logo_path = os.path.join(current_dir, logo_name)
+# Note: Filename must match exactly as uploaded: "Bharat ai force logo.jpeg"
+logo_filename = "Bharat ai force logo.jpeg"
+logo_path = os.path.join(current_dir, logo_filename)
 
 col_logo, col_title = st.columns([1, 5])
 
 with col_logo:
-    # Check if file exists; if not, check parent directory (common in Streamlit cloud)
+    # Check current dir and parent dir (useful for different deployment structures)
     if not os.path.exists(logo_path):
-        logo_path = os.path.join(os.path.dirname(current_dir), logo_name)
+        logo_path = os.path.join(os.path.dirname(current_dir), logo_filename)
 
     if os.path.exists(logo_path):
-        logo = Image.open(logo_path)
-        st.image(logo, width=80)
+        try:
+            logo = Image.open(logo_path)
+            st.image(logo, width=80)
+        except Exception:
+            st.write("🖼️") # Fallback icon if image is corrupt
     else:
-        st.info("LOGO") # Fallback if image still not found
+        st.write("🛡️") # Fallback icon if file not found
 
 with col_title:
     st.markdown('<div class="main-title">Ghost Bait</div>', unsafe_allow_html=True)
@@ -86,7 +89,6 @@ st.markdown("---")
 st.sidebar.title("Conversation History")
 
 try:
-    # Increased timeout for initial wake-up
     res = requests.get(HISTORY_URL, timeout=15)
     if res.status_code == 200:
         history_data = res.json()
@@ -105,19 +107,18 @@ except Exception:
 # ==============================
 # USER INPUT
 # ==============================
-message = st.text_area("Enter Suspicious Message", placeholder="Copy-paste the scam message here...")
+message = st.text_area("Enter Suspicious Message", placeholder="Paste scam text here...")
 user_email = st.text_input("Your Email (optional for report copy)")
 
 # ==============================
 # ANALYZE BUTTON
 # ==============================
 if st.button("Analyze Message"):
-    if message.strip() == "":
+    if not message.strip():
         st.warning("Please enter a message")
     else:
         headers = {"x-api-key": API_KEY}
         payload = {"message": message}
-
         try:
             with st.spinner("Scanning for scam signatures..."):
                 res = requests.post(API_URL, json=payload, headers=headers, timeout=30)
@@ -126,7 +127,7 @@ if st.button("Analyze Message"):
                 data = res.json()
                 st.success("Analysis Complete")
                 st.json(data)
-
+                
                 st.download_button(
                     label="Download Result JSON",
                     data=json.dumps(data, indent=4),
@@ -134,8 +135,7 @@ if st.button("Analyze Message"):
                     mime="application/json"
                 )
             else:
-                st.error(f"API Error (Status: {res.status_code})")
-
+                st.error(f"API Error: {res.status_code}")
         except Exception as e:
             st.error(f"Connection Error: {e}")
 
@@ -145,15 +145,15 @@ if st.button("Analyze Message"):
 if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
     headers = {"x-api-key": API_KEY}
     payload = {"user_email": user_email if user_email else None}
-
+    
     try:
-        with st.spinner("Transmitting data to authority (may take 30-40s)..."):
-            # Timeout increased to 60 to prevent SMTP read-timeouts
+        # Increased timeout to 60s because SMTP can be slow on Render Free tier
+        with st.spinner("Transmitting data to Authority (may take 40s)..."):
             response = requests.post(REPORT_URL, json=payload, headers=headers, timeout=60)
 
         if response.status_code == 200:
-            st.success("Report Sent Securely to Authority")
+            st.success(f"Report Sent Securely to jagadeesh.n10d@gmail.com")
         else:
-            st.error(f"Report Failed (Status: {response.status_code})")
+            st.error("Report transmission failed. Check Backend Logs.")
     except Exception as e:
-        st.error(f"Transmission Error: {e}")
+        st.error(f"Transmission Error (Timeout): {e}")
