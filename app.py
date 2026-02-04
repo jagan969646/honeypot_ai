@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.middleware.cors import CORSMiddleware # Added for CORS
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+# Importing your configuration and logic modules
 from config import API_KEY, CONFIDENCE_SCAM, CONFIDENCE_SAFE
 
 from agents.detector import is_scam
@@ -20,15 +21,14 @@ from utils.email_service import send_report_email
 app = FastAPI(title="Ghost Bait - AI Honeypot API")
 
 # ==============================
-# CORS MIDDLEWARE (NEW - CRITICAL FOR DEPLOYMENT)
+# CORS MIDDLEWARE
 # ==============================
-# This allows your Streamlit frontend to talk to this FastAPI backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins, you can change this to your streamlit URL later
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers (including x-api-key)
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 init_db()
@@ -51,9 +51,9 @@ class ReportRequest(BaseModel):
 @app.get("/")
 def root():
     return {
-        "status": "running",
+        "status": "online",
         "service": "Ghost Bait - Bharat AI-Force",
-        "time": datetime.utcnow()
+        "timestamp": datetime.utcnow()
     }
 
 
@@ -65,26 +65,29 @@ def analyze_message(
     payload: MessageRequest,
     x_api_key: Optional[str] = Header(None)
 ):
-
+    # 1. Security Check
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
     user_message = payload.message.strip()
-
     if not user_message:
         raise HTTPException(status_code=400, detail="Empty message")
 
-    # 1. Detect Scam
+    # 2. Weighted Detection (Uses your new Trust vs Scam score)
     scam_flag = is_scam(user_message)
 
-    # 2. Extract Entities
-    entities = extract_entities(user_message)
+    # 3. Entity Extraction (Only extract forensic data if a scam is suspected)
+    if scam_flag:
+        entities = extract_entities(user_message)
+        confidence = CONFIDENCE_SCAM
+    else:
+        # For safe messages, we return empty entities to protect privacy
+        entities = {"bank": [], "upi": [], "links": [], "phones": [], "emails": []}
+        confidence = CONFIDENCE_SAFE
 
-    # 3. Generate Agent Reply
+    # 4. Agent Response Logic
+    # The responder will now know if it's a real scam or a safe bill
     agent_reply = generate_reply(user_message, scam_flag)
-
-    # 4. Confidence
-    confidence = CONFIDENCE_SCAM if scam_flag else CONFIDENCE_SAFE
 
     response = {
         "scam_detected": scam_flag,
@@ -94,10 +97,11 @@ def analyze_message(
         "links": entities["links"],
         "phones": entities["phones"],
         "emails": entities["emails"],
-        "agent_reply": agent_reply
+        "agent_reply": agent_reply,
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    # Save to DB
+    # 5. Persistent Logging
     save_message(user_message, response)
 
     return response
@@ -108,6 +112,7 @@ def analyze_message(
 # ==============================
 @app.get("/history")
 def history():
+    # Returns last saved forensic logs from SQLite
     return get_history()
 
 
@@ -119,18 +124,21 @@ def report_authority(
     payload: ReportRequest,
     x_api_key: Optional[str] = Header(None)
 ):
-
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
-    history_data = get_history()
+    # Get only the cases where a scam was actually detected for the official report
+    all_history = get_history()
+    scam_only_history = [item for item in all_history if item.get("scam_detected") == True]
 
-    if not history_data:
-        return {"status": "no_data"}
+    if not scam_only_history:
+        return {"status": "no_threats_found", "message": "No scam cases found in history to report."}
 
-    success = send_report_email(history_data, payload.user_email)
+    # Transmit forensic log to jagadeesh.n10d@gmail.com
+    success = send_report_email(scam_only_history, payload.user_email)
 
     return {
         "status": "report_sent" if success else "failed",
-        "reported_by": payload.user_email or "anonymous"
+        "reported_by": payload.user_email or "anonymous",
+        "cases_reported": len(scam_only_history)
     }
