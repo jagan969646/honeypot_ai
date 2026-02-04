@@ -4,19 +4,20 @@ from pydantic import BaseModel
 from typing import Optional, List
 import logging
 
-# Import your custom logic
+# Import your core logic from the agents and database folders
 from config import API_KEY, CONFIDENCE_SCAM, CONFIDENCE_SAFE
 from agents.detector import is_scam
 from agents.extractor import extract_entities
 from agents.responder import generate_reply
 from database.db import init_db, save_message, get_history
 
-# Setup logging
+# Setup logging for Render console monitoring
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Ghost Bait API - Challenge 2")
 
+# Configure CORS to allow Streamlit and Tester tool access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +32,8 @@ try:
 except Exception as e:
     logger.error(f"DB Init Failed: {e}")
 
-# Request Schema for the Tester
+# --- Pydantic model for input validation ---
+# This MUST match the key 'message' sent by the tester
 class MessageRequest(BaseModel):
     message: str
 
@@ -40,7 +42,7 @@ def root():
     return {
         "status": "online", 
         "service": "Ghost Bait",
-        "challenge": "Agentic Honey-Pot (Challenge 2)"
+        "challenge": "Agentic Honey-Pot (Level 2)"
     }
 
 @app.post("/analyze")
@@ -65,14 +67,14 @@ async def analyze_message(
     is_malicious = bool(is_scam(user_text))
     
     # 3. Forensic Intelligence Extraction
-    # Required for Challenge 2: Bank accounts, UPI IDs, and phishing links.
+    # Required for Challenge 2: Extract bank accounts, UPI IDs, and phishing links.
     if is_malicious:
         entities = extract_entities(user_text)
     else:
         entities = {"bank": [], "upi": [], "links": [], "phones": [], "emails": []}
 
     # 4. Construct Structured JSON Response
-    # Explicit type casting prevents 'INVALID_REQUEST_BODY' errors.
+    # Explicit type enforcement (bool, float, list, str) prevents 422 errors.
     response_data = {
         "scam_detected": is_malicious,
         "confidence": float(CONFIDENCE_SCAM if is_malicious else CONFIDENCE_SAFE),
@@ -81,10 +83,10 @@ async def analyze_message(
         "links": list(entities.get("links", [])),
         "phones": list(entities.get("phones", [])),
         "emails": list(entities.get("emails", [])),
-        "agent_reply": str(generate_reply(user_text, is_malicious)) # Active Engagement
+        "agent_reply": str(generate_reply(user_text, is_malicious)) # Believable persona engagement
     }
 
-    # 5. Background Data Persistence
+    # 5. Persistent Logging
     try:
         save_message(user_text, response_data)
     except Exception as e:
@@ -94,4 +96,5 @@ async def analyze_message(
 
 @app.get("/history")
 def history():
+    """Returns forensic history for the Streamlit sidebar."""
     return get_history()
