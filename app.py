@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware # Added for CORS
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -17,6 +18,19 @@ from utils.email_service import send_report_email
 # APP INIT
 # ==============================
 app = FastAPI(title="Ghost Bait - AI Honeypot API")
+
+# ==============================
+# CORS MIDDLEWARE (NEW - CRITICAL FOR DEPLOYMENT)
+# ==============================
+# This allows your Streamlit frontend to talk to this FastAPI backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins, you can change this to your streamlit URL later
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers (including x-api-key)
+)
+
 init_db()
 
 
