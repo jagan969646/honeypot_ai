@@ -1,122 +1,150 @@
-from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-
-from config import API_KEY, CONFIDENCE_SCAM, CONFIDENCE_SAFE
-
-from agents.detector import is_scam
-from agents.extractor import extract_entities
-from agents.responder import generate_reply
-
-from database.db import init_db, save_message, get_history
-from utils.email_service import send_report_email
-
+import streamlit as st
+import requests
+import json
+from PIL import Image
+import os
 
 # ==============================
-# APP INIT
+# CONFIG
 # ==============================
-app = FastAPI(title="Ghost Bait - AI Honeypot API")
-init_db()
-
-
-# ==============================
-# REQUEST MODELS
-# ==============================
-class MessageRequest(BaseModel):
-    message: str
-
-
-class ReportRequest(BaseModel):
-    user_email: Optional[str] = None
-
+API_URL = "http://127.0.0.1:8000/analyze"
+REPORT_URL = "http://127.0.0.1:8000/report"
+HISTORY_URL = "http://127.0.0.1:8000/history"
+API_KEY = "HCL123"
 
 # ==============================
-# ROOT
+# PAGE CONFIG
 # ==============================
-@app.get("/")
-def root():
-    return {
-        "status": "running",
-        "service": "Ghost Bait - Bharat AI-Force",
-        "time": datetime.utcnow()
-    }
-
+st.set_page_config(page_title="Ghost Bait", layout="centered")
 
 # ==============================
-# ANALYZE ENDPOINT
+# FUTURISTIC THEME
 # ==============================
-@app.post("/analyze")
-def analyze_message(
-    payload: MessageRequest,
-    x_api_key: Optional[str] = Header(None)
-):
-
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-
-    user_message = payload.message.strip()
-
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Empty message")
-
-    # 1. Detect Scam
-    scam_flag = is_scam(user_message)
-
-    # 2. Extract Entities
-    entities = extract_entities(user_message)
-
-    # 3. Generate Agent Reply
-    agent_reply = generate_reply(user_message, scam_flag)
-
-    # 4. Confidence
-    confidence = CONFIDENCE_SCAM if scam_flag else CONFIDENCE_SAFE
-
-    response = {
-        "scam_detected": scam_flag,
-        "confidence": confidence,
-        "bank_accounts": entities["bank"],
-        "upi_ids": entities["upi"],
-        "links": entities["links"],
-        "phones": entities["phones"],
-        "emails": entities["emails"],
-        "agent_reply": agent_reply
-    }
-
-    # Save to DB
-    save_message(user_message, response)
-
-    return response
-
+st.markdown("""
+<style>
+.stApp {
+    background: radial-gradient(circle at top, #0f172a, #020617);
+    color: #e2e8f0;
+}
+.main-title {
+    color: #22d3ee;
+    text-align: center;
+    font-size: 42px;
+    font-weight: 700;
+}
+.sub-title {
+    color: #94a3b8;
+    text-align: center;
+    font-size: 16px;
+}
+.stButton>button {
+    background: linear-gradient(90deg, #06b6d4, #9333ea);
+    color: white;
+    border-radius: 12px;
+    border: none;
+    padding: 0.6em 1em;
+}
+.stTextInput>div>div>input, .stTextArea textarea {
+    background-color: #020617;
+    color: #e2e8f0;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==============================
-# HISTORY ENDPOINT
+# HEADER
 # ==============================
-@app.get("/history")
-def history():
-    return get_history()
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+logo_path = os.path.join(BASE_DIR, "Bharat ai force logo.jpeg")
 
+col_logo, col_title = st.columns([1, 5])
+
+with col_logo:
+    if os.path.exists(logo_path):
+        logo = Image.open(logo_path)
+        st.image(logo, width=80)
+
+with col_title:
+    st.markdown('<div class="main-title">Ghost Bait</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Designed by Bharat AI-Force</div>', unsafe_allow_html=True)
+
+st.markdown("---")
 
 # ==============================
-# REPORT ENDPOINT
+# SIDEBAR HISTORY
 # ==============================
-@app.post("/report")
-def report_authority(
-    payload: ReportRequest,
-    x_api_key: Optional[str] = Header(None)
-):
+st.sidebar.title("Conversation History")
 
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
+try:
+    res = requests.get(HISTORY_URL)
+    if res.status_code == 200:
+        history_data = res.json()
 
-    history_data = get_history()
+        if history_data:
+            for i, item in enumerate(history_data[::-1], 1):
+                st.sidebar.markdown(f"**Case {i}**")
+                st.sidebar.json(item)
+                st.sidebar.markdown("---")
+        else:
+            st.sidebar.write("No history yet.")
+    else:
+        st.sidebar.write("Failed to load history")
 
-    if not history_data:
-        return {"status": "no_data"}
+except:
+    st.sidebar.write("Backend not running")
 
-    success = send_report_email(history_data, payload.user_email)
+# ==============================
+# USER INPUT
+# ==============================
+message = st.text_area("Enter Suspicious Message")
+user_email = st.text_input("Your Email (optional for report copy)")
 
-    return {
-        "status": "report_sent" if success else "failed",
-        "reported_by": payload.user_email or "anonymous"
-    }
+# ==============================
+# ANALYZE BUTTON
+# ==============================
+if st.button("Analyze Message"):
+    if message.strip() == "":
+        st.warning("Please enter a message")
+    else:
+        headers = {"x-api-key": API_KEY}
+        payload = {"message": message}
+
+        try:
+            res = requests.post(API_URL, json=payload, headers=headers)
+
+            if res.status_code == 200:
+                data = res.json()
+                st.success("Analysis Complete")
+                st.json(data)
+
+                st.download_button(
+                    label="Download Result JSON",
+                    data=json.dumps(data, indent=4),
+                    file_name="ghost_bait_result.json",
+                    mime="application/json"
+                )
+            else:
+                st.error("API Error")
+
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
+
+# ==============================
+# REPORT BUTTON (UPDATED BLOCK)
+# ==============================
+if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
+    headers = {"x-api-key": API_KEY}
+    payload = {
+        "user_email": user_email if user_email else None
+    }
+
+    try:
+        response = requests.post(REPORT_URL, json=payload, headers=headers)
+
+        if response.status_code == 200:
+            st.success("Report Sent Securely to Authority")
+        else:
+            st.error("Report Failed")
+
+    except Exception as e:
+        st.error("Backend Not Running")
