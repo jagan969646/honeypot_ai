@@ -7,9 +7,12 @@ import os
 # ==============================
 # CONFIG
 # ==============================
-API_URL = "http://127.0.0.1:8000/analyze"
-REPORT_URL = "http://127.0.0.1:8000/report"
-HISTORY_URL = "http://127.0.0.1:8000/history"
+# FIXED URL: ensure it ends in .onrender.com
+RENDER_BACKEND_URL = "https://honeypot-ai-8dvx.onrender.com"
+
+API_URL = f"{RENDER_BACKEND_URL}/analyze"
+REPORT_URL = f"{RENDER_BACKEND_URL}/report"
+HISTORY_URL = f"{RENDER_BACKEND_URL}/history"
 API_KEY = "HCL123"
 
 # ==============================
@@ -23,50 +26,60 @@ st.set_page_config(page_title="Ghost Bait", layout="centered")
 st.markdown("""
 <style>
 .stApp {
-    background: radial-gradient(circle at top, #0f172a, #020617);
-    color: #e2e8f0;
+    background: radial-gradient(circle at top, #0f172a, #020617);
+    color: #e2e8f0;
 }
 .main-title {
-    color: #22d3ee;
-    text-align: center;
-    font-size: 42px;
-    font-weight: 700;
+    color: #22d3ee;
+    text-align: center;
+    font-size: 42px;
+    font-weight: 700;
 }
 .sub-title {
-    color: #94a3b8;
-    text-align: center;
-    font-size: 16px;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 16px;
 }
 .stButton>button {
-    background: linear-gradient(90deg, #06b6d4, #9333ea);
-    color: white;
-    border-radius: 12px;
-    border: none;
-    padding: 0.6em 1em;
+    background: linear-gradient(90deg, #06b6d4, #9333ea);
+    color: white;
+    border-radius: 12px;
+    border: none;
+    padding: 0.6em 1em;
 }
 .stTextInput>div>div>input, .stTextArea textarea {
-    background-color: #020617;
-    color: #e2e8f0;
+    background-color: #020617;
+    color: #e2e8f0;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================
-# HEADER
+# HEADER & LOGO
 # ==============================
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-logo_path = os.path.join(BASE_DIR, "Bharat ai force logo.jpeg")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+logo_filename = "Bharat ai force logo.jpeg"
+logo_path = os.path.join(current_dir, logo_filename)
 
 col_logo, col_title = st.columns([1, 5])
 
 with col_logo:
-    if os.path.exists(logo_path):
-        logo = Image.open(logo_path)
-        st.image(logo, width=80)
+    # Check current and parent directory for logo
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(os.path.dirname(current_dir), logo_filename)
+
+    if os.path.exists(logo_path):
+        try:
+            logo = Image.open(logo_path)
+            st.image(logo, width=80)
+        except:
+            st.write("🛡️")
+    else:
+        st.write("🛡️")
 
 with col_title:
-    st.markdown('<div class="main-title">Ghost Bait</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Designed by Bharat AI-Force</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">Ghost Bait</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Designed by Bharat AI-Force</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -76,75 +89,71 @@ st.markdown("---")
 st.sidebar.title("Conversation History")
 
 try:
-    res = requests.get(HISTORY_URL)
-    if res.status_code == 200:
-        history_data = res.json()
-
-        if history_data:
-            for i, item in enumerate(history_data[::-1], 1):
-                st.sidebar.markdown(f"**Case {i}**")
-                st.sidebar.json(item)
-                st.sidebar.markdown("---")
-        else:
-            st.sidebar.write("No history yet.")
-    else:
-        st.sidebar.write("Failed to load history")
-
-except:
-    st.sidebar.write("Backend not running")
+    res = requests.get(HISTORY_URL, timeout=15)
+    if res.status_code == 200:
+        history_data = res.json()
+        if history_data:
+            for i, item in enumerate(history_data[::-1], 1):
+                st.sidebar.markdown(f"**Case {i}**")
+                st.sidebar.json(item)
+                st.sidebar.markdown("---")
+        else:
+            st.sidebar.write("No history yet.")
+    else:
+        st.sidebar.write("Backend waking up...")
+except Exception:
+    st.sidebar.write("Connecting to Cloud Engine...")
 
 # ==============================
 # USER INPUT
 # ==============================
-message = st.text_area("Enter Suspicious Message")
+message = st.text_area("Enter Suspicious Message", placeholder="Paste scam text here...")
 user_email = st.text_input("Your Email (optional for report copy)")
 
 # ==============================
 # ANALYZE BUTTON
 # ==============================
 if st.button("Analyze Message"):
-    if message.strip() == "":
-        st.warning("Please enter a message")
-    else:
-        headers = {"x-api-key": API_KEY}
-        payload = {"message": message}
+    if not message.strip():
+        st.warning("Please enter a message")
+    else:
+        headers = {"x-api-key": API_KEY}
+        payload = {"message": message}
+        try:
+            with st.spinner("Scanning for scam signatures..."):
+                res = requests.post(API_URL, json=payload, headers=headers, timeout=30)
 
-        try:
-            res = requests.post(API_URL, json=payload, headers=headers)
-
-            if res.status_code == 200:
-                data = res.json()
-                st.success("Analysis Complete")
-                st.json(data)
-
-                st.download_button(
-                    label="Download Result JSON",
-                    data=json.dumps(data, indent=4),
-                    file_name="ghost_bait_result.json",
-                    mime="application/json"
-                )
-            else:
-                st.error("API Error")
-
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
+            if res.status_code == 200:
+                data = res.json()
+                st.success("Analysis Complete")
+                st.json(data)
+                
+                st.download_button(
+                    label="Download Result JSON",
+                    data=json.dumps(data, indent=4),
+                    file_name="ghost_bait_result.json",
+                    mime="application/json"
+                )
+            else:
+                st.error(f"API Error: {res.status_code}")
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
 
 # ==============================
-# REPORT BUTTON (UPDATED BLOCK)
+# REPORT BUTTON
 # ==============================
 if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
-    headers = {"x-api-key": API_KEY}
-    payload = {
-        "user_email": user_email if user_email else None
-    }
+    headers = {"x-api-key": API_KEY}
+    payload = {"user_email": user_email if user_email else None}
+    
+    try:
+        # Long timeout to allow Render + Gmail to complete
+        with st.spinner("Transmitting data to Authority (may take 40s)..."):
+            response = requests.post(REPORT_URL, json=payload, headers=headers, timeout=60)
 
-    try:
-        response = requests.post(REPORT_URL, json=payload, headers=headers)
-
-        if response.status_code == 200:
-            st.success("Report Sent Securely to Authority")
-        else:
-            st.error("Report Failed")
-
-    except Exception as e:
-        st.error("Backend Not Running")
+        if response.status_code == 200:
+            st.success(f"Report Sent Securely to jagadeesh.n10d@gmail.com")
+        else:
+            st.error("Report transmission failed. Check Backend Logs.")
+    except Exception as e:
+        st.error(f"Transmission Error (Timeout): {e}")
