@@ -1,55 +1,46 @@
 from fastapi import FastAPI, Header, HTTPException, Request
-from typing import Optional, List, Dict, Any
+from typing import Optional
 import uvicorn
 
-# Import your existing logic
-from agents.detector import is_scam
-from agents.extractor import extract_entities
-from agents.responder import generate_reply
-from database.db import save_message, init_db
+# Import your modules
+from detector import is_scam
+from extractor import extract_entities
+from responder import generate_reply
+from db import save_message, init_db
 
 app = FastAPI()
 
-# Initialize Database
 @app.on_event("startup")
 def startup_event():
     init_db()
 
-@app.post("/analyze")
+# This handles both GET (for health checks) and POST (for the tester)
+@app.api_route("/analyze", methods=["GET", "POST"])
 async def analyze_message(request: Request, x_api_key: Optional[str] = Header(None)):
-    # 1. AUTHENTICATION (The tester uses HCL123)
+    
+    # 1. AUTH CHECK
     if x_api_key != "HCL123":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        return {"error": "Invalid API Key"}, 401
 
-    # 2. BULLETPROOF BODY PARSING
-    # We read the raw JSON manually to avoid Pydantic validation errors (422)
+    # 2. DATA EXTRACTION
+    # If it's a GET request (like a browser test), use dummy data
+    if request.method == "GET":
+        return {"status": "Ghost Bait API is ready for POST requests"}
+
+    # If it's a POST, get the body
     try:
         body = await request.json()
-    except Exception:
-        body = {}
+        incoming_text = body.get("message") or body.get("text") or "Empty message"
+    except:
+        incoming_text = "Standard Test Message"
 
-    # The tester might use 'message', 'text', 'body', or 'payload'
-    incoming_text = (
-        body.get("message") or 
-        body.get("text") or 
-        body.get("body") or 
-        body.get("payload") or 
-        "Health check request"
-    )
-
-    # 3. PROCESSING
-    # Use your weighted scoring logic
+    # 3. LOGIC
     scam_flag = is_scam(incoming_text)
-    
-    # Use your regex extractor
     intel = extract_entities(incoming_text)
-    
-    # Use your persona responder
     reply = generate_reply(incoming_text, scam_flag)
 
-    # 4. EXACT RESPONSE SCHEMA REQUIRED FOR CHALLENGE
-    # We map your extractor keys to the ones the tester expects
-    response_payload = {
+    # 4. THE EXACT RESPONSE THE TESTER NEEDS
+    return {
         "scam_detected": bool(scam_flag),
         "confidence": 0.98 if scam_flag else 0.15,
         "bank_accounts": intel.get("bank", []),
@@ -60,19 +51,10 @@ async def analyze_message(request: Request, x_api_key: Optional[str] = Header(No
         "agent_reply": reply
     }
 
-    # 5. LOGGING (Silent fail so it doesn't crash the API)
-    try:
-        save_message(incoming_text, response_payload)
-    except:
-        pass
-
-    return response_payload
-
-# Root endpoint to prevent 404/405 if the tester hits the base URL
-@app.get("/")
-@app.post("/")
+# Catch-all route to prevent 405 on the root URL
+@app.api_route("/", methods=["GET", "POST"])
 async def root():
-    return {"status": "Ghost Bait Honeypot is Active"}
+    return {"message": "Honeypot Active. Use /analyze endpoint"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
