@@ -59,7 +59,9 @@ st.markdown("""
 # HEADER & LOGO
 # ==============================
 current_dir = os.path.dirname(os.path.abspath(__file__))
-logo_filename = "Bharat ai force logo.jpeg"
+
+# UPDATE THIS: Use your actual logo filename here
+logo_filename = "your_logo_file.jpeg" 
 logo_path = os.path.join(current_dir, logo_filename)
 
 col_logo, col_title = st.columns([1, 5])
