@@ -20,3 +20,8 @@ AI-powered Scam Detection & Honeypot System.
 git clone https://github.com/yourname/ghost-bait
 cd ghost-bait
 pip install -r requirements.txt
+Run Backend
+uvicorn backend.app:app --reload
+
+Run Frontend
+streamlit run frontend/streamlit_app.py
