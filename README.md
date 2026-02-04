@@ -1,5 +1,5 @@
 # 👻 Ghost Bait – Bharat AI-Force
-
+[APP](https://honeypotai-joej78hrn2fksemvxwcjyt.streamlit.app/)
 AI-powered Scam Detection & Honeypot System.
 
 ## Features
