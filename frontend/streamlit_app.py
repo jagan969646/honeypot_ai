@@ -5,16 +5,14 @@ from PIL import Image
 import os
 
 # ==============================
-# CONFIG (UPDATED FOR DEPLOYMENT)
+# CONFIG
 # ==============================
-# Replace this with your actual Render External URL
-RENDER_BACKEND_URL = "https://srv-d61ddachg0os73cni1s0.onrender.com" 
+RENDER_BACKEND_URL = "https://honeypot-ai-8dvx.onrender.com"
 
 API_URL = f"{RENDER_BACKEND_URL}/analyze"
 REPORT_URL = f"{RENDER_BACKEND_URL}/report"
 HISTORY_URL = f"{RENDER_BACKEND_URL}/history"
 API_KEY = "HCL123"
-
 # ==============================
 # PAGE CONFIG
 # ==============================
@@ -149,3 +147,4 @@ if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
             st.error("Report transmission failed.")
     except Exception as e:
         st.error(f"Backend Offline: {e}")
+
