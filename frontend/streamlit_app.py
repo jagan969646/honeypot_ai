@@ -5,11 +5,14 @@ from PIL import Image
 import os
 
 # ==============================
-# CONFIG
+# CONFIG (UPDATED FOR DEPLOYMENT)
 # ==============================
-API_URL = "http://127.0.0.1:8000/analyze"
-REPORT_URL = "http://127.0.0.1:8000/report"
-HISTORY_URL = "http://127.0.0.1:8000/history"
+# Replace this with your actual Render External URL
+RENDER_BACKEND_URL = "https://srv-d61ddachg0os73cni1s0.onrender.com" 
+
+API_URL = f"{RENDER_BACKEND_URL}/analyze"
+REPORT_URL = f"{RENDER_BACKEND_URL}/report"
+HISTORY_URL = f"{RENDER_BACKEND_URL}/history"
 API_KEY = "HCL123"
 
 # ==============================
@@ -54,8 +57,8 @@ st.markdown("""
 # ==============================
 # HEADER
 # ==============================
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-logo_path = os.path.join(BASE_DIR, "Bharat ai force logo.jpeg")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+logo_path = os.path.join(current_dir, "Bharat ai force logo.jpeg")
 
 col_logo, col_title = st.columns([1, 5])
 
@@ -76,10 +79,10 @@ st.markdown("---")
 st.sidebar.title("Conversation History")
 
 try:
-    res = requests.get(HISTORY_URL)
+    # Adding a timeout so the UI doesn't hang if the backend is sleeping
+    res = requests.get(HISTORY_URL, timeout=10)
     if res.status_code == 200:
         history_data = res.json()
-
         if history_data:
             for i, item in enumerate(history_data[::-1], 1):
                 st.sidebar.markdown(f"**Case {i}**")
@@ -88,10 +91,9 @@ try:
         else:
             st.sidebar.write("No history yet.")
     else:
-        st.sidebar.write("Failed to load history")
-
-except:
-    st.sidebar.write("Backend not running")
+        st.sidebar.write("Backend is starting up or unreachable.")
+except Exception:
+    st.sidebar.write("Attempting to connect to Cloud API...")
 
 # ==============================
 # USER INPUT
@@ -110,7 +112,8 @@ if st.button("Analyze Message"):
         payload = {"message": message}
 
         try:
-            res = requests.post(API_URL, json=payload, headers=headers)
+            with st.spinner("Scanning for scam signatures..."):
+                res = requests.post(API_URL, json=payload, headers=headers, timeout=20)
 
             if res.status_code == 200:
                 data = res.json()
@@ -124,27 +127,25 @@ if st.button("Analyze Message"):
                     mime="application/json"
                 )
             else:
-                st.error("API Error")
+                st.error(f"API Error (Status: {res.status_code})")
 
         except Exception as e:
             st.error(f"Connection Error: {e}")
 
 # ==============================
-# REPORT BUTTON (UPDATED BLOCK)
+# REPORT BUTTON
 # ==============================
 if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
     headers = {"x-api-key": API_KEY}
-    payload = {
-        "user_email": user_email if user_email else None
-    }
+    payload = {"user_email": user_email if user_email else None}
 
     try:
-        response = requests.post(REPORT_URL, json=payload, headers=headers)
+        with st.spinner("Transmitting data to authority..."):
+            response = requests.post(REPORT_URL, json=payload, headers=headers, timeout=20)
 
         if response.status_code == 200:
             st.success("Report Sent Securely to Authority")
         else:
-            st.error("Report Failed")
-
+            st.error("Report transmission failed.")
     except Exception as e:
-        st.error("Backend Not Running")
+        st.error(f"Backend Offline: {e}")
