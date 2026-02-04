@@ -6,17 +6,17 @@ from typing import Optional
 import uvicorn
 
 # --- PATH FIX FOR RENDER ---
-# This ensures Python looks in the current directory for detector.py, extractor.py, etc.
+# Forces Python to look in the current directory for detector.py, extractor.py, etc.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Now imports will work regardless of environment
+# Now imports will work on Render/Linux
 try:
     from detector import is_scam
     from extractor import extract_entities
     from responder import generate_reply
     from db import init_db, save_message
 except ImportError as e:
-    print(f"CRITICAL IMPORT ERROR: {e}")
+    print(f"IMPORT ERROR: {e}. Check if files are in the root directory.")
 
 app = FastAPI()
 
@@ -29,11 +29,11 @@ def startup_event():
 
 @app.post("/analyze")
 async def analyze(request: Request, x_api_key: Optional[str] = Header(None)):
-    # 1. AUTHENTICATION
+    # 1. AUTHENTICATION (Must match HCL123)
     if x_api_key != "HCL123":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # 2. PARSE GUVI REQUEST FORMAT
+    # 2. PARSE GUVI REQUEST FORMAT (Nested JSON)
     try:
         body = await request.json()
         session_id = body.get("sessionId", "unknown")
@@ -42,21 +42,22 @@ async def analyze(request: Request, x_api_key: Optional[str] = Header(None)):
         incoming_text = message_obj.get("text", "")
         history = body.get("conversationHistory", [])
     except Exception:
-        raise HTTPException(status_code=422, detail="Invalid JSON Body")
+        raise HTTPException(status_code=422, detail="Invalid JSON Body Structure")
 
-    # 3. EXECUTE HONEYPOT LOGIC
+    # 3. CORE LOGIC
     scam_flag = is_scam(incoming_text)
     intel = extract_entities(incoming_text)
+    # Generate the persona-based response
     bot_reply = generate_reply(incoming_text, scam_flag)
 
     # 4. MANDATORY GUVI RESPONSE FORMAT
-    # Evaluator ONLY looks for "status" and "reply"
+    # The evaluator ONLY wants these two keys
     response_payload = {
         "status": "success",
         "reply": bot_reply
     }
 
-    # 5. DB LOGGING (Internal)
+    # 5. DB LOGGING (Internal Forensics)
     try:
         save_message(incoming_text, {
             "scam_detected": scam_flag,
@@ -67,11 +68,11 @@ async def analyze(request: Request, x_api_key: Optional[str] = Header(None)):
     except:
         pass
 
-    # 6. FINAL CALLBACK (Mandatory for Scoring)
-    # Triggered when actionable intel (UPI/Bank) is found
+    # 6. MANDATORY FINAL CALLBACK (For Scoring)
+    # Triggered when actionable intel (UPI/Bank) is discovered
     if scam_flag and (intel.get("bank") or intel.get("upi")):
         try:
-            callback_data = {
+            callback_payload = {
                 "sessionId": session_id,
                 "scamDetected": True,
                 "totalMessagesExchanged": len(history) + 2,
@@ -82,11 +83,12 @@ async def analyze(request: Request, x_api_key: Optional[str] = Header(None)):
                     "phoneNumbers": intel.get("phones", []),
                     "suspiciousKeywords": ["urgent", "blocked", "verify", "sbi"]
                 },
-                "agentNotes": "Agent engaged scammer and extracted financial details."
+                "agentNotes": "Agent engaged scammer and successfully extracted intelligence."
             }
-            requests.post(CALLBACK_URL, json=callback_data, timeout=5)
+            # Sending data to GUVI evaluation endpoint
+            requests.post(CALLBACK_URL, json=callback_payload, timeout=5)
         except Exception as e:
-            print(f"Callback failed: {e}")
+            print(f"Callback error: {e}")
 
     return response_payload
 
