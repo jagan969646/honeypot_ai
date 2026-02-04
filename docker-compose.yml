@@ -1,0 +1,21 @@
+
+(You can generate full MIT text from choosealicense.com)
+
+---
+
+# `docker-compose.yml` (Optional but Powerful)
+
+Only if you want one-command startup.
+
+```yaml
+version: "3.9"
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8501:8501"
