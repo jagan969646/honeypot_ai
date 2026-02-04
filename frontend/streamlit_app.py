@@ -7,11 +7,10 @@ import os
 # ==============================
 # CONFIG
 # ==============================
-# FIXED URL: ensure it ends in .onrender.com
+# Ensure this matches your live FastAPI URL
 RENDER_BACKEND_URL = "https://honeypot-ai-8dvx.onrender.com"
 
 API_URL = f"{RENDER_BACKEND_URL}/analyze"
-REPORT_URL = f"{RENDER_BACKEND_URL}/report"
 HISTORY_URL = f"{RENDER_BACKEND_URL}/history"
 API_KEY = "HCL123"
 
@@ -64,7 +63,6 @@ logo_path = os.path.join(current_dir, logo_filename)
 col_logo, col_title = st.columns([1, 5])
 
 with col_logo:
-    # Check current and parent directory for logo
     if not os.path.exists(logo_path):
         logo_path = os.path.join(os.path.dirname(current_dir), logo_filename)
 
@@ -93,6 +91,7 @@ try:
     if res.status_code == 200:
         history_data = res.json()
         if history_data:
+            # Show latest cases first
             for i, item in enumerate(history_data[::-1], 1):
                 st.sidebar.markdown(f"**Case {i}**")
                 st.sidebar.json(item)
@@ -107,13 +106,13 @@ except Exception:
 # ==============================
 # USER INPUT
 # ==============================
-message = st.text_area("Enter Suspicious Message", placeholder="Paste scam text here...")
-user_email = st.text_input("Your Email (optional for report copy)")
+# Removed the email input field to simplify the UI
+message = st.text_area("Enter Suspicious Message", height=200, placeholder="Paste scam text or transaction alerts here...")
 
 # ==============================
 # ANALYZE BUTTON
 # ==============================
-if st.button("Analyze Message"):
+if st.button("Analyze Message", use_container_width=True):
     if not message.strip():
         st.warning("Please enter a message")
     else:
@@ -125,35 +124,30 @@ if st.button("Analyze Message"):
 
             if res.status_code == 200:
                 data = res.json()
-                st.success("Analysis Complete")
+                
+                # Visual feedback based on detection
+                if data.get("scam_detected"):
+                    st.error("🚨 SCAM DETECTED")
+                else:
+                    st.success("✅ MESSAGE VERIFIED SAFE")
+                
+                # Display Results
+                st.markdown("### Forensic Intelligence Extraction")
                 st.json(data)
                 
                 st.download_button(
-                    label="Download Result JSON",
+                    label="💾 Download Intelligence Log",
                     data=json.dumps(data, indent=4),
-                    file_name="ghost_bait_result.json",
+                    file_name="ghost_bait_forensics.json",
                     mime="application/json"
                 )
             else:
-                st.error(f"API Error: {res.status_code}")
+                st.error(f"API Error: {res.status_code}. The backend might still be starting up.")
         except Exception as e:
             st.error(f"Connection Error: {e}")
 
 # ==============================
-# REPORT BUTTON
+# FOOTER
 # ==============================
-if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
-    headers = {"x-api-key": API_KEY}
-    payload = {"user_email": user_email if user_email else None}
-    
-    try:
-        # Long timeout to allow Render + Gmail to complete
-        with st.spinner("Transmitting data to Authority (may take 40s)..."):
-            response = requests.post(REPORT_URL, json=payload, headers=headers, timeout=60)
-
-        if response.status_code == 200:
-            st.success(f"Report Sent Securely to jagadeesh.n10d@gmail.com")
-        else:
-            st.error("Report transmission failed. Check Backend Logs.")
-    except Exception as e:
-        st.error(f"Transmission Error (Timeout): {e}")
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: #64748b;'>Level 2 - Implementation Phase | Bharat AI-Force</p>", unsafe_allow_html=True)
