@@ -62,9 +62,10 @@ async def analyze(request: Request, x_api_key: Optional[str] = Header(None)):
         "reply": bot_reply
     }
 
-@app.get("/")
+@app.get("/analyze")
 async def health():
     return {"status": "success", "info": "Honeypot Live"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
