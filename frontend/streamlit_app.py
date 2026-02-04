@@ -157,3 +157,22 @@ if st.button("🚨 REPORT AUTHORITY", use_container_width=True):
             st.error("Report transmission failed. Check Backend Logs.")
     except Exception as e:
         st.error(f"Transmission Error (Timeout): {e}")
+    st.markdown("#### `>> EVIDENCE_MANAGEMENT`")
+            r_col1, r_col2 = st.columns(2)
+            
+            with r_col1:
+                mail_recipient = "jagadeesh.n10d@gmail.com"
+                mail_subject = f"FRAUD_REPORT_{f_hash[:8]}"
+                mailto_url = f"mailto:{mail_recipient}?subject={urllib.parse.quote(mail_subject)}&body={urllib.parse.quote(report_content)}"
+                
+                st.markdown(f'''
+                    <a href="{mailto_url}" target="_self" style="text-decoration:none;">
+                        <div style="background-color:#ff003c; padding:11px; text-align:center; border-radius:5px; border: 1px solid white; cursor: pointer;">
+                            <span class="report-btn-text">🚨 REPORT AUTHORITY</span>
+                        </div>
+                    </a>
+                ''', unsafe_allow_html=True)
+
+            with r_col2:
+                st.download_button(label="📥 DOWNLOAD LOCAL COPY", data=report_content, file_name=f"Report_{f_hash[:8]}.txt", use_container_width=True)
+
